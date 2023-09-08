@@ -1,0 +1,89 @@
+Lightning component 
+
+<!-- recentAccounts.cmp -->
+<aura:component implements="force:appHostable,flexipage:availableForAllPageTypes,flexipage:availableForRecordHome,force:hasRecordId,forceCommunity:availableForAllPageTypes,force:lightningQuickAction" access="global" controller="RecentAccountsController" >
+   <aura:attribute name="accounts" type="Account[]" />
+    <aura:handler name="init" value="{!this}" action="{!c.doInit}" />
+    
+    <ul>
+        <aura:iteration items="{!v.accounts}" var="account">
+            <li>{!account.Name} (Created on {!account.CreatedDate})</li>
+        </aura:iteration>
+    </ul>
+</aura:component>
+
+// recentAccountsController.js
+({
+    doInit : function(component, event, helper) {
+        var action = component.get("c.getRecentAccounts");
+        action.setCallback(this, function(response) {
+            var state = response.getState();
+            if (state === "SUCCESS") {
+                component.set("v.accounts", response.getReturnValue());
+            }
+        });
+        $A.enqueueAction(action);
+    }
+})
+
+
+Apex Classes:
+
+1. public class HttpCalloutController {
+    public static void makeHttpCallout() {
+        Http http = new Http();
+        HttpRequest request = new HttpRequest();
+        request.setEndpoint('https://postman-echo.com/get?foo1=bar1&foo2=bar2');
+        request.setMethod('GET');
+        HttpResponse response = http.send(request);
+        String responseBody = response.getBody();
+        System.debug('HTTP Response: ' + responseBody);
+    }
+}
+
+
+2. public class RecentAccountsController {
+    @AuraEnabled
+    public static List<Account> getRecentAccounts() {
+        return [SELECT Id, Name, CreatedDate FROM Account ORDER BY CreatedDate DESC LIMIT 10];
+    }
+}
+
+
+Apex Trigger:
+
+trigger UpdateContactCount on Contact (after insert, after update, after delete, after undelete) {
+    // Create a set to store unique Account IDs affected by Contacts
+    Set<Id> accountIds = new Set<Id>();
+    
+    if (Trigger.isInsert || Trigger.isUpdate || Trigger.isUndelete) {
+        for (Contact c : Trigger.new) {
+            accountIds.add(c.AccountId);
+        }
+    }
+    
+    if (Trigger.isUpdate || Trigger.isDelete) {
+        for (Contact c : Trigger.old) {
+            accountIds.add(c.AccountId);
+        }
+    }
+    
+    // Query and update Account records with the count of related Contacts
+    List<Account> accountsToUpdate = [SELECT Id, (SELECT Id FROM Contacts) FROM Account WHERE Id IN :accountIds];
+    
+    for (Account acc : accountsToUpdate) {
+        acc.Number_of_Contacts__c = acc.Contacts.size();
+    }
+    
+    // Update the Account records
+    update accountsToUpdate;
+}
+
+
+Field :
+
+Number_of_Contacts__c in Account Object
+
+
+
+
